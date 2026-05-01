@@ -124,6 +124,10 @@ def health():
         "version": "1.2.0",
     }
 
+@app.get("/api/health")
+def health_check():
+    return {"status": "ok"}
+
 
 @app.post("/api/analyze", response_model=ExecutionPlan)
 def analyze_meeting(payload: AnalyzeRequest):

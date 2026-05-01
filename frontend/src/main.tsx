@@ -21,6 +21,7 @@ import { demoContext, demoTranscript } from './demo'
 import './styles.css'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'
+let hasWarmedUpApi = false
 
 function classNames(...classes: Array<string | false | null | undefined>) {
   return classes.filter(Boolean).join(' ')
@@ -128,6 +129,24 @@ function App() {
   const [showDemoNotice, setShowDemoNotice] = useState(() => {
   return localStorage.getItem('chaos-to-sprint-demo-notice-seen') !== 'true'
 })
+
+useEffect(() => {
+  if (hasWarmedUpApi) return
+
+  hasWarmedUpApi = true
+
+  const controller = new AbortController()
+  const timeoutId = window.setTimeout(() => controller.abort(), 10000)
+
+  fetch(`${API_BASE_URL}/api/health`, {
+    method: 'GET',
+    signal: controller.signal,
+  }).catch(() => {
+    // Silent warm-up only. Do not show an error to the user.
+  }).finally(() => {
+    window.clearTimeout(timeoutId)
+  })
+}, [])
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', dark)
