@@ -17,7 +17,7 @@ import {
   Zap,
 } from 'lucide-react'
 import type { ExecutionPlan, GithubIssue, Priority, Confidence } from './types'
-import { demoContext, demoTranscript } from './demo'
+import { demoContext, demoPlan, demoTranscript } from './demo'
 import './styles.css'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'
@@ -25,6 +25,30 @@ let hasWarmedUpApi = false
 
 function classNames(...classes: Array<string | false | null | undefined>) {
   return classes.filter(Boolean).join(' ')
+}
+
+function warmUpApi({ force = false }: { force?: boolean } = {}) {
+  if (!force && hasWarmedUpApi) return
+
+  hasWarmedUpApi = true
+
+  const controller = new AbortController()
+  const timeoutId = window.setTimeout(() => controller.abort(), 12000)
+
+  fetch(`${API_BASE_URL}/api/health`, {
+    method: 'GET',
+    signal: controller.signal,
+  })
+    .catch(() => {
+      // Silent warm-up only. Do not show an error to the user.
+    })
+    .finally(() => {
+      window.clearTimeout(timeoutId)
+    })
+}
+
+function normalizeText(value: string) {
+  return value.trim().replace(/\s+/g, ' ')
 }
 
 function PriorityBadge({ value }: { value: Priority }) {
@@ -126,27 +150,14 @@ function App() {
   const [plan, setPlan] = useState<ExecutionPlan | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [instantDemoMode, setInstantDemoMode] = useState(false)
   const [showDemoNotice, setShowDemoNotice] = useState(() => {
-  return localStorage.getItem('chaos-to-sprint-demo-notice-seen') !== 'true'
-})
-
-useEffect(() => {
-  if (hasWarmedUpApi) return
-
-  hasWarmedUpApi = true
-
-  const controller = new AbortController()
-  const timeoutId = window.setTimeout(() => controller.abort(), 10000)
-
-  fetch(`${API_BASE_URL}/api/health`, {
-    method: 'GET',
-    signal: controller.signal,
-  }).catch(() => {
-    // Silent warm-up only. Do not show an error to the user.
-  }).finally(() => {
-    window.clearTimeout(timeoutId)
+    return localStorage.getItem('chaos-to-sprint-demo-notice-seen') !== 'true'
   })
-}, [])
+
+  useEffect(() => {
+    warmUpApi()
+  }, [])
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', dark)
@@ -158,6 +169,22 @@ useEffect(() => {
     setLoading(true)
     setError('')
     setPlan(null)
+    setInstantDemoMode(false)
+
+    const isDemoTranscript = normalizeText(transcript) === normalizeText(demoTranscript)
+    const isDemoContext = context.trim().length === 0 || normalizeText(context) === normalizeText(demoContext)
+
+    if (isDemoTranscript && isDemoContext) {
+      warmUpApi({ force: true })
+
+      window.setTimeout(() => {
+        setPlan(demoPlan)
+        setInstantDemoMode(true)
+        setLoading(false)
+      }, 650)
+
+      return
+    }
 
     try {
       const response = await fetch(`${API_BASE_URL}/api/analyze`, {
@@ -186,11 +213,13 @@ useEffect(() => {
     setPlan(null)
     setError('')
     setLoading(false)
+    setInstantDemoMode(false)
   }
+
   function closeDemoNotice() {
-  localStorage.setItem('chaos-to-sprint-demo-notice-seen', 'true')
-  setShowDemoNotice(false)
-}
+    localStorage.setItem('chaos-to-sprint-demo-notice-seen', 'true')
+    setShowDemoNotice(false)
+  }
 
   const actionItemsCount = plan?.action_items.length ?? 0
   const peopleCount = plan?.people.length ?? 0
@@ -198,38 +227,44 @@ useEffect(() => {
 
   const progressText = useMemo(() => {
     if (!loading) return ''
+
+    if (normalizeText(transcript) === normalizeText(demoTranscript)) {
+      return 'Preparing an instant demo preview while the backend wakes up in the background...'
+    }
+
     return 'Screening the transcript, analyzing it with OpenAI in real time, extracting owners, and building sprint-ready output...'
-  }, [loading])
+  }, [loading, transcript])
 
   return (
     <main className="min-h-screen overflow-hidden bg-[radial-gradient(circle_at_top_left,_#c7d2fe,_transparent_34%),linear-gradient(135deg,_#f8fafc,_#eef2ff_45%,_#fdf2f8)] text-zinc-900 dark:bg-[radial-gradient(circle_at_top_left,_rgba(99,102,241,0.28),_transparent_32%),linear-gradient(135deg,_#050505,_#111827_45%,_#18181b)] dark:text-white">
       <div className="pointer-events-none fixed inset-0 bg-grid opacity-[0.28] dark:opacity-[0.17]" />
+
       {showDemoNotice && (
-  <div className="fixed inset-0 z-50 grid place-items-center bg-black/45 px-5 backdrop-blur-sm">
-    <div className="w-full max-w-lg rounded-3xl border border-white/20 bg-white p-6 shadow-2xl dark:bg-zinc-950">
-      <div className="mb-4 inline-flex rounded-full bg-indigo-500/10 px-3 py-1 text-xs font-black uppercase tracking-wide text-indigo-700 dark:text-indigo-300">
-        Demo Notice
-      </div>
+        <div className="fixed inset-0 z-50 grid place-items-center bg-black/45 px-5 backdrop-blur-sm">
+          <div className="w-full max-w-lg rounded-3xl border border-white/20 bg-white p-6 shadow-2xl dark:bg-zinc-950">
+            <div className="mb-4 inline-flex rounded-full bg-indigo-500/10 px-3 py-1 text-xs font-black uppercase tracking-wide text-indigo-700 dark:text-indigo-300">
+              Demo Notice
+            </div>
 
-      <h2 className="text-2xl font-black tracking-tight text-zinc-950 dark:text-white">
-        This demo uses a cost-efficient AI model
-      </h2>
+            <h2 className="text-2xl font-black tracking-tight text-zinc-950 dark:text-white">
+              This demo may use a sleeping backend
+            </h2>
 
-      <p className="mt-3 leading-7 text-zinc-700 dark:text-zinc-300">
-        To keep the live demo lightweight and affordable, Chaos to Sprint uses a cost-efficient OpenAI model. Analysis is generated in real time, so creating the execution plan may take a few seconds.
-      </p>
+            <p className="mt-3 leading-7 text-zinc-700 dark:text-zinc-300">
+              The live backend is hosted on Render free tier, so the first real request may take extra time. The demo preview loads instantly while the backend wakes up in the background.
+            </p>
 
-      <div className="mt-6 flex justify-end">
-        <button
-          onClick={closeDemoNotice}
-          className="rounded-2xl bg-indigo-600 px-5 py-3 text-sm font-black text-white transition hover:-translate-y-0.5 hover:bg-indigo-500"
-        >
-          Got it
-        </button>
-      </div>
-    </div>
-  </div>
-)}
+            <div className="mt-6 flex justify-end">
+              <button
+                onClick={closeDemoNotice}
+                className="rounded-2xl bg-indigo-600 px-5 py-3 text-sm font-black text-white transition hover:-translate-y-0.5 hover:bg-indigo-500"
+              >
+                Got it
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="relative mx-auto max-w-7xl px-5 py-8 sm:px-8 lg:px-10">
         <nav className="mb-10 flex items-center justify-between">
@@ -268,7 +303,7 @@ useEffect(() => {
 
             <div className="mt-7 flex flex-wrap gap-3 text-sm font-semibold text-zinc-700 dark:text-zinc-300">
               <span className="rounded-full bg-white/75 px-4 py-2 ring-1 ring-zinc-200 dark:bg-white/5 dark:ring-white/10">Live OpenAI API</span>
-              <span className="rounded-full bg-white/75 px-4 py-2 ring-1 ring-zinc-200 dark:bg-white/5 dark:ring-white/10">Real-time analysis</span>
+              <span className="rounded-full bg-white/75 px-4 py-2 ring-1 ring-zinc-200 dark:bg-white/5 dark:ring-white/10">Instant demo preview</span>
               <span className="rounded-full bg-white/75 px-4 py-2 ring-1 ring-zinc-200 dark:bg-white/5 dark:ring-white/10">Moderation + validation</span>
               <span className="rounded-full bg-white/75 px-4 py-2 ring-1 ring-zinc-200 dark:bg-white/5 dark:ring-white/10">Evidence-based output</span>
             </div>
@@ -277,16 +312,16 @@ useEffect(() => {
           <div className="rounded-[2rem] border border-white/40 bg-white/65 p-5 shadow-2xl backdrop-blur-2xl dark:border-white/10 dark:bg-white/5">
             <div className="rounded-[1.5rem] bg-zinc-950 p-5 text-white dark:bg-black/60">
               <div className="mb-4 flex items-center justify-between">
-                <span className="text-sm font-bold text-zinc-300">Live AI Pipeline</span>
+                <span className="text-sm font-bold text-zinc-300">AI Pipeline</span>
                 <span className="rounded-full bg-emerald-400/15 px-3 py-1 text-xs font-bold text-emerald-300">OpenAI Powered</span>
               </div>
 
               <div className="space-y-3 text-sm">
                 {[
                   'Paste or load meeting transcript',
+                  'Instant demo preview for recruiters',
+                  'Wake backend in the background',
                   'Validate request on secure backend',
-                  'Screen unsafe or malicious content',
-                  'Analyze with OpenAI in real time',
                   'Generate execution dashboard',
                 ].map((item, index) => (
                   <div key={item} className="flex items-center gap-3 rounded-2xl bg-white/5 p-3">
@@ -305,9 +340,9 @@ useEffect(() => {
               <div className="space-y-4">
                 <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-4 text-sm leading-6 text-emerald-800 dark:text-emerald-200">
                   <div className="mb-1 flex items-center gap-2 font-black">
-                    <ShieldCheck size={18} /> Secure live AI analysis
+                    <ShieldCheck size={18} /> Demo-friendly live AI analysis
                   </div>
-                  Your transcript is validated on the backend, screened for unsafe instructions, and analyzed by OpenAI in real time.
+                  Demo transcript results load instantly for a smooth first impression. Custom transcripts still run through the live backend and OpenAI analysis.
                 </div>
 
                 <div className="flex flex-wrap gap-3">
@@ -317,6 +352,8 @@ useEffect(() => {
                       setContext(demoContext)
                       setPlan(null)
                       setError('')
+                      setInstantDemoMode(false)
+                      warmUpApi({ force: true })
                     }}
                     className="rounded-2xl bg-zinc-950 px-4 py-3 text-sm font-bold text-white transition hover:-translate-y-0.5 hover:shadow-lg dark:bg-white dark:text-zinc-950"
                   >
@@ -357,7 +394,7 @@ useEffect(() => {
                   className="flex w-full items-center justify-center gap-3 rounded-3xl bg-indigo-600 px-5 py-4 text-base font-black text-white shadow-glow transition hover:-translate-y-0.5 hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0"
                 >
                   {loading ? <Loader2 className="animate-spin" size={20} /> : <Sparkles size={20} />}
-                  {loading ? 'Analyzing with OpenAI...' : 'Generate Execution Plan'}
+                  {loading ? 'Generating execution plan...' : 'Generate Execution Plan'}
                 </button>
 
                 {loading && <p className="text-sm font-medium text-zinc-600 dark:text-zinc-400">{progressText}</p>}
@@ -384,7 +421,7 @@ useEffect(() => {
                   <h3 className="text-2xl font-black">Your execution dashboard will appear here</h3>
 
                   <p className="mx-auto mt-3 max-w-md text-zinc-600 dark:text-zinc-400">
-                    Load the demo transcript, run the live OpenAI analysis, and see the transcript transformed into a professional sprint plan.
+                    Load the demo transcript, generate the execution plan, and see the transcript transformed into a professional sprint plan.
                   </p>
                 </div>
               </div>
@@ -397,7 +434,24 @@ useEffect(() => {
             <div className="flex flex-wrap items-center justify-between gap-4 rounded-3xl border border-zinc-200/70 bg-white/80 p-5 shadow-sm backdrop-blur-xl dark:border-white/10 dark:bg-zinc-950/55">
               <div>
                 <p className="text-sm font-bold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Execution Dashboard</p>
-                <h2 className="mt-1 text-2xl font-black text-zinc-950 dark:text-white">Transcript analyzed successfully</h2>
+
+                <div className="mt-1 flex flex-wrap items-center gap-3">
+                  <h2 className="text-2xl font-black text-zinc-950 dark:text-white">
+                    Transcript analyzed successfully
+                  </h2>
+
+                  {instantDemoMode && (
+                    <span className="rounded-full border border-emerald-500/25 bg-emerald-500/10 px-3 py-1 text-xs font-black uppercase tracking-wide text-emerald-700 dark:text-emerald-300">
+                      Instant demo preview
+                    </span>
+                  )}
+                </div>
+
+                {instantDemoMode && (
+                  <p className="mt-2 max-w-2xl text-sm font-medium text-zinc-600 dark:text-zinc-400">
+                    This demo response is preloaded for a fast first impression while the live backend wakes up in the background.
+                  </p>
+                )}
               </div>
 
               <button
