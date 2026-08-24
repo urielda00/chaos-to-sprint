@@ -18,9 +18,9 @@ import {
 } from 'lucide-react'
 import type { ExecutionPlan, GithubIssue, Priority, Confidence } from './types'
 import { demoContext, demoPlan, demoTranscript } from './demo'
+import { apiFetch, primaryApiFetch } from './api'
 import './styles.css'
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'
 let hasWarmedUpApi = false
 
 function classNames(...classes: Array<string | false | null | undefined>) {
@@ -32,18 +32,11 @@ function warmUpApi({ force = false }: { force?: boolean } = {}) {
 
   hasWarmedUpApi = true
 
-  const controller = new AbortController()
-  const timeoutId = window.setTimeout(() => controller.abort(), 12000)
-
-  fetch(`${API_BASE_URL}/api/health`, {
+  primaryApiFetch('/api/health', {
     method: 'GET',
-    signal: controller.signal,
-  })
+  }, 12000)
     .catch(() => {
       // Silent warm-up only. Do not show an error to the user.
-    })
-    .finally(() => {
-      window.clearTimeout(timeoutId)
     })
 }
 
@@ -187,7 +180,7 @@ function App() {
     }
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/analyze`, {
+      const response = await apiFetch('/api/analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ transcript, context }),

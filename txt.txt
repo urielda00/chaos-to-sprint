@@ -1,0 +1,19 @@
+**How much time does your team waste turning meeting notes into actual Jira tasks?** 🤦‍♂️
+
+We've all been there: a 60-minute Zoom session full of great ideas, completely lost in a messy, unstructured text transcript. 
+
+To solve this, I built **Chaos to Sprint** 🚀 – an AI-powered analyzer that transforms chaotic meeting transcripts into structured, execution-ready sprint plans in seconds.
+
+**How I built it:**
+🔹 **Backend:** Fast, asynchronous **FastAPI (Python)** integrated with **OpenAI's API** using advanced prompt engineering to ensure structured, reliable data extraction.
+🔹 **Frontend:** A responsive, clean UI built with **React, Vite, and Tailwind CSS**.
+🔹 **DevOps/Deployment:** Fully decoupled and deployed – Backend on **Render** (with CORS security policies) and Frontend on **Netlify**.
+
+This project, one of many, allowed me to dive deep into LLM integration, asynchronous backend architecture, and seamless full-stack deployment.
+
+👉 Check out the repository here: [https://github.com/urielda00/chaos-to-sprint]
+👉 Try the live app here: [https://chaos-to-sprint-uriel-dahan.netlify.app/]
+
+I'm currently looking for my next challenge as a Full-Stack / Backend Developer. If your team is looking for someone who loves solving real-world problems with modern tech stacks, let's connect! 
+
+#FullStack #Python #FastAPI #ReactJS #OpenAI #AI #WebDevelopment #JobHunting

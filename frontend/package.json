@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "test:api-fallback": "tsc --target ES2022 --module NodeNext --moduleResolution NodeNext --skipLibCheck --types node --outDir .tmp-api-check src/api-client.ts && node scripts/verify-api-fallback.mjs",
     "preview": "vite preview"
   },
   "dependencies": {
