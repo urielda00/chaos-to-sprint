@@ -168,7 +168,7 @@ Meeting transcript:
             len(plan.action_items) > 0 or len(plan.risks) > 0 or len(plan.decisions) > 0
         ):
             raise HTTPException(
-                status_code=502,
+                status_code=500,
                 detail="Analysis returned executable work but no GitHub issues. Please run the analysis again.",
             )
 

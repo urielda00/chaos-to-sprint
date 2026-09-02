@@ -5,6 +5,9 @@ export type ApiClientOptions = {
 }
 
 const availabilityStatusCodes = new Set([502, 503, 504])
+const healthProbeTimeoutMs = 4_000
+const requestTimeoutMs = 20_000
+const analyzeRequestTimeoutMs = 120_000
 
 export class ApiResponseError extends Error {
   constructor(
@@ -34,7 +37,7 @@ async function fetchFrom(
   baseUrl: string,
   path: string,
   init: RequestInit = {},
-  timeoutMs = 20_000,
+  timeoutMs = requestTimeoutMs,
 ) {
   const controller = new AbortController()
   const timeoutId = window.setTimeout(() => controller.abort(), timeoutMs)
@@ -56,18 +59,34 @@ async function fetchFrom(
   }
 }
 
-/**
- * Sends a request to the primary API once, then retries it once on the fallback
- * API only when the primary has a connectivity/availability failure.
- */
 export function createApiClient({ primaryBaseUrl, fallbackBaseUrl = '', fetchImpl = fetch }: ApiClientOptions) {
   return async function apiFetch(path: string, init: RequestInit = {}, timeoutMs?: number) {
+    const method = (init.method || 'GET').toUpperCase()
+    const hasFallback =
+      Boolean(fallbackBaseUrl) &&
+      fallbackBaseUrl.replace(/\/$/, '') !== primaryBaseUrl.replace(/\/$/, '')
+
+    if (method === 'POST' && path.replace(/\?.*$/, '') === '/api/analyze') {
+      let selectedBaseUrl = primaryBaseUrl
+
+      try {
+        await fetchFrom(fetchImpl, primaryBaseUrl, '/api/health', { method: 'GET' }, healthProbeTimeoutMs)
+      } catch (error) {
+        if (!hasFallback || !isAvailabilityFailure(error)) throw error
+        selectedBaseUrl = fallbackBaseUrl
+      }
+
+      return fetchFrom(fetchImpl, selectedBaseUrl, path, init, timeoutMs ?? analyzeRequestTimeoutMs)
+    }
+
+    const canRetrySafely = method === 'GET' || method === 'HEAD'
+
     try {
       return await fetchFrom(fetchImpl, primaryBaseUrl, path, init, timeoutMs)
     } catch (error) {
       const canUseFallback =
-        Boolean(fallbackBaseUrl) &&
-        fallbackBaseUrl.replace(/\/$/, '') !== primaryBaseUrl.replace(/\/$/, '') &&
+        canRetrySafely &&
+        hasFallback &&
         isAvailabilityFailure(error)
 
       if (!canUseFallback) throw error
