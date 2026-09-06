@@ -1,3 +1,4 @@
+name: chaos-to-sprint
 services:
   backend:
     build:
